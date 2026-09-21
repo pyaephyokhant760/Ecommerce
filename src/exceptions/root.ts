@@ -1,15 +1,15 @@
 export class HttpException extends Error {
-    massage: string;
-    errorcode : any;
-    statusCode : number;
-    error : any;
-    constructor(message: string, statusCode: number, errorcode?: any, error?: any) {
+    message: string;
+    errorCode: ErrorCode;
+    statusCode: number;
+    errors: any;
+
+    constructor(message: string, errorCode: ErrorCode, statusCode: number, errors?: any) {
         super(message);
-        this.massage = message;
+        this.message = message;
+        this.errorCode = errorCode;
         this.statusCode = statusCode;
-        this.errorcode = errorcode;
-        this.error = error;
-        
+        this.errors = errors;
     }
 }
 
