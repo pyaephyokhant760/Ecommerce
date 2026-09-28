@@ -9,7 +9,13 @@
     "prestart": "node scripts/ensure-prisma-client.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:replica-set": "ts-node scripts/init-replica-set.ts"
+    "db:replica-set": "ts-node scripts/init-replica-set.ts",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f api",
+    "docker:restart": "docker compose restart api",
+    "docker:tools": "docker compose --profile tools up -d",
+    "docker:reset": "docker compose down -v"
   },
   "keywords": [],
   "author": "",

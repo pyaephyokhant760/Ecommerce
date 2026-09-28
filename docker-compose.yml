@@ -1,0 +1,114 @@
+# ---------------------------------------------------------------------------
+# Local development stack: MongoDB (single-node replica set) + API.
+#
+#   docker compose up -d --build        # start everything
+#   docker compose logs -f api          # follow the API logs
+#   docker compose --profile tools up -d  # + mongo-express on :8081
+#   docker compose down                 # stop (keeps data)
+#   docker compose down -v              # stop and wipe the database
+#
+# Why a replica set?
+#   Prisma's MongoDB connector wraps every write in a transaction and MongoDB
+#   only supports transactions on replica sets. A standalone mongod fails with
+#   "Prisma needs to perform transactions, which requires your MongoDB server
+#   to be run as a replica set."
+# ---------------------------------------------------------------------------
+name: ecommerce
+
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: ecommerce-mongo
+    restart: unless-stopped
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --port
+      - "27017"
+    ports:
+      # Exposed so you can inspect the DB from the host (see DATABASE_URL notes
+      # in .env.example - host connections need directConnection=true).
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    healthcheck:
+      # First run: rs.initiate() the single-node set. Later runs: report status.
+      # The member host is the compose service name so the API container can
+      # resolve it during replica-set discovery.
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --host 127.0.0.1:27017 --eval 'try { rs.status().ok } catch (e) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo:27017\"}]}).ok }'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 15s
+    networks:
+      - ecommerce
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce-api
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+      # Service name + replicaSet is what the Prisma Mongo connector expects.
+      DATABASE_URL: mongodb://mongo:27017/ecommerce?replicaSet=rs0
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me}
+      MONGO_REPL_SET_NAME: rs0
+      # Mongod writes the repl-set config with host "mongo:27017", which only
+      # resolves inside this network - fine, the API runs here too.
+    ports:
+      - "3000:3000"
+    volumes:
+      # Hot reload: bind the sources over the image copies.
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - ./nodemon.json:/app/nodemon.json:ro
+      # Keep the image's node_modules from being shadowed by the host's.
+      - /app/node_modules
+    # --legacy-watch (chokidar polling) makes reloads reliable on Docker
+    # Desktop (macOS/Windows), where inotify events don't cross the VM
+    # boundary. Harmless on Linux.
+    command: npm start -- --legacy-watch
+    networks:
+      - ecommerce
+
+  # Optional DB browser:  docker compose --profile tools up -d
+  # Then open http://localhost:8081 (admin / admin).
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: ecommerce-mongo-express
+    restart: unless-stopped
+    profiles:
+      - tools
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/ecommerce?replicaSet=rs0
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+    ports:
+      - "8081:8081"
+    networks:
+      - ecommerce
+
+volumes:
+  mongo-data:
+  mongo-config:
+
+networks:
+  ecommerce:
+    driver: bridge

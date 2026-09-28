@@ -1,0 +1,16 @@
+# Build context noise / secrets that must never land in the image.
+node_modules
+npm-debug.log*
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+dist
+coverage
+*.md
+Dockerfile
+docker-compose.yml
+compose.yaml
+.agents
+skills-lock.json

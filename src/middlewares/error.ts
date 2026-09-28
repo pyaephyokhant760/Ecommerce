@@ -2,7 +2,10 @@ import { Request, Response, NextFunction } from "express";
 import { HttpException } from "../exceptions/root";
 
 export const errorMiddleware = (
-    err: HttpException,
+    // `unknown` (not `HttpException`) so the `instanceof` check below actually
+    // narrows: typing it as HttpException made TS collapse the fallback branch
+    // to `never` and reject `err.message` (TS2339).
+    err: unknown,
     req: Request,
     res: Response,
     next: NextFunction
@@ -18,7 +21,7 @@ export const errorMiddleware = (
 
     // ၂။ မဟုတ်ရင် unknown error — 500 ပြန်
     return res.status(500).json({
-        message: err?.message || "Internal Server Error",
+        message: err instanceof Error ? err.message : "Internal Server Error",
         errorCode: "INTERNAL_SERVER_ERROR",
         errors: null,
     });
